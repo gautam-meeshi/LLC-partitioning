@@ -61,6 +61,11 @@
 #include "sim/process.hh"
 #include "sim/stat_control.hh"
 #include "sim/system.hh"
+#include "sim/real.hh"
+#include "sim/pseudo_inst.hh"
+#include "sim/measurements.hh"
+#include "sim/space_partitioning.hh"
+#include <vector>
 
 namespace gem5
 {
@@ -448,6 +453,13 @@ CPU::CPUStats::CPUStats(CPU *cpu)
 void
 CPU::tick()
 {
+    measurements::measure(curTick());
+    if (real::isBandwidthPartitioningOn()) {
+        real::calculatePriority(curTick());
+    }
+    if (SpacePartitioning::isSpacePartitioningOn()) {
+        SpacePartitioning::changeSpacePartition(curTick());
+    }
     DPRINTF(O3CPU, "\n\nO3CPU: Ticking main, O3CPU.\n");
     assert(!switchedOut());
     assert(drainState() != DrainState::Drained);
@@ -1218,6 +1230,12 @@ CPU::addInst(const DynInstPtr &inst)
     return --(instList.end());
 }
 
+//std::vector<uint64_t> instCommitted(real::getNumCores(), 0);
+uint64_t instCommitted[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
+Tick lastPeriod = 0;
+bool dumpflag = true;
+
 void
 CPU::instDone(ThreadID tid, const DynInstPtr &inst)
 {
@@ -1226,7 +1244,28 @@ CPU::instDone(ThreadID tid, const DynInstPtr &inst)
         thread[tid]->numInst++;
         thread[tid]->threadStats.numInsts++;
         cpuStats.committedInsts[tid]++;
-
+        int core = SpacePartitioning::readCoreId(name());
+        if (SpacePartitioning::getSpacePartitioningAlgo() == 5) {
+            SpacePartitioning::recordInstruction(core);
+        }
+        if (dumpflag) {
+            //simInstPerInterval[core]++;
+            instCommitted[core]++;
+            if (instCommitted[core] == real::getDumpStatsAfter()) {
+                if (dumpflag) {
+                    //resetCoreStats();SAKSHI implemented function NA
+                    //resetL3QStats(curTick());this function aint available in this version
+                    //ThreadContext *tc = threadContexts[0];
+                    std::cout<<"Dumping ";
+                    for (int i=0;i<8;i++){
+                        std::cout<<instCommitted[i]<<',';
+                    }
+                    std::cout<<'\n';
+                    pseudo_inst::dumpresetstats(threadContexts[0], 0, 0);
+                    dumpflag = false;
+                }
+            }
+        }
         // Check for instruction-count-based events.
         thread[tid]->comInstEventQueue.serviceEvents(thread[tid]->numInst);
     }
