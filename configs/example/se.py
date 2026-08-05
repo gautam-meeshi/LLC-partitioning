@@ -72,7 +72,11 @@ def get_processes(args):
     outputs = []
     errouts = []
     pargs = []
-
+    # -------------------------------------------------------------------
+    #garima --cwd
+    cwds = []                           # |ARITRA|
+    # -------------------------------------------------------------------
+    
     workloads = args.cmd.split(';')
     if args.input != "":
         inputs = args.input.split(';')
@@ -82,6 +86,10 @@ def get_processes(args):
         errouts = args.errout.split(';')
     if args.options != "":
         pargs = args.options.split(';')
+    # -------------------------------------------------------------------
+    if args.cwd != "":                  # |ARITRA|
+        cwds = args.cwd.split(';')      # |ARITRA|
+    # -------------------------------------------------------------------
 
     idx = 0
     for wrkld in workloads:
@@ -105,6 +113,10 @@ def get_processes(args):
             process.output = outputs[idx]
         if len(errouts) > idx:
             process.errout = errouts[idx]
+        # -------------------------------------------------------------------
+        if len(cwds) > idx:             # |ARITRA|
+            process.cwd = cwds[idx]     # |ARITRA|
+        # -------------------------------------------------------------------
 
         multiprocesses.append(process)
         idx += 1
@@ -171,6 +183,26 @@ system = System(cpu = [CPUClass(cpu_id=i) for i in range(np)],
 
 if numThreads > 1:
     system.multi_thread = True
+
+#GAUTAM
+system.measurementsoptions = MeasurementsOptions(num_cores = args.num_cpus,
+                                                    num_llcs = args.num_l2caches,
+                                                    llc_dump_interval = args.llc_dump_interval*500)
+system.space_partitioning_options = SpacePartitioningOptions(algo = args.space_partitioning_algo,
+                                                                num_cores=args.num_cpus,
+                                                                num_llcs=args.num_l2caches,
+                                                                interval_size=args.space_partitioning_interval*500,
+                                                                l2_assoc = args.l2_assoc,
+                                                                learning_rate = args.learning_rate,
+                                                                discount = args.discount,
+                                                                q_file_path = args.q_file_path,
+                                                                private_ways = args.private_ways,
+                                                                l2_size = int(args.l2_size[:-2])*2**20,
+                                                                max_classes = args.max_classes,
+                                                                icov_thresh = args.icov_thresh)
+system.bw_partitioning_options = BWPartitioningOptions(algorithm = args.bw_partitioning_algo,
+                                                                dumpStatsAfter=args.dump_stats_after,
+                                                                interSize = args.bw_partitioning_interval)
 
 # Create a top-level voltage domain
 system.voltage_domain = VoltageDomain(voltage = args.sys_voltage)
