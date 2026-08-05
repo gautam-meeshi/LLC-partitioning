@@ -51,7 +51,7 @@
 #include "mem/ruby/protocol/PrefetchBit.hh"
 #include "mem/ruby/protocol/RubyAccessMode.hh"
 #include "mem/ruby/protocol/RubyRequestType.hh"
-
+/*GAUTAM - added variables m_coreid, m_cpuReqType and added a parameter in all the constructors to include them*/
 namespace gem5
 {
 
@@ -79,11 +79,13 @@ class RubyRequest : public Message
     bool m_isTlbi;
     // Should be uint64, but SLICC complains about casts
     Addr m_tlbiTransactionUid;
+    int m_cpuReqType;//GAUTAM - added these fields in contructors also
+    int m_coreid;//GAUTAM
 
     RubyRequest(Tick curTime, uint64_t _paddr, int _len,
         uint64_t _pc, RubyRequestType _type, RubyAccessMode _access_mode,
         PacketPtr _pkt, PrefetchBit _pb = PrefetchBit_No,
-        ContextID _proc_id = 100, ContextID _core_id = 99)
+        ContextID _proc_id = 100, ContextID _core_id = 99, int _cpuReqType =-1, int _coreid=-1)
         : Message(curTime),
           m_PhysicalAddress(_paddr),
           m_Type(_type),
@@ -96,7 +98,9 @@ class RubyRequest : public Message
           m_htmFromTransaction(false),
           m_htmTransactionUid(0),
           m_isTlbi(false),
-          m_tlbiTransactionUid(0)
+          m_tlbiTransactionUid(0),
+          m_cpuReqType(_cpuReqType),
+          m_coreid(_coreid)
     {
         m_LineAddress = makeLineAddress(m_PhysicalAddress);
     }
@@ -104,7 +108,7 @@ class RubyRequest : public Message
     /** RubyRequest for memory management commands */
     RubyRequest(Tick curTime,
         uint64_t _pc, RubyRequestType _type, RubyAccessMode _access_mode,
-        PacketPtr _pkt, ContextID _proc_id, ContextID _core_id)
+        PacketPtr _pkt, ContextID _proc_id, ContextID _core_id, int _cpuReqType =-1, int _coreid=-1)
         : Message(curTime),
           m_PhysicalAddress(0),
           m_Type(_type),
@@ -117,7 +121,9 @@ class RubyRequest : public Message
           m_htmFromTransaction(false),
           m_htmTransactionUid(0),
           m_isTlbi(false),
-          m_tlbiTransactionUid(0)
+          m_tlbiTransactionUid(0),
+          m_cpuReqType(_cpuReqType),
+          m_coreid(_coreid)
     {
         assert(m_pkt->req->isMemMgmt());
     }
@@ -128,7 +134,7 @@ class RubyRequest : public Message
         unsigned _proc_id, unsigned _core_id,
         int _wm_size, std::vector<bool> & _wm_mask,
         DataBlock & _Data,
-        uint64_t _instSeqNum = 0)
+        uint64_t _instSeqNum = 0, int _cpuReqType = -1, int _coreid=-1)
         : Message(curTime),
           m_PhysicalAddress(_paddr),
           m_Type(_type),
@@ -145,7 +151,9 @@ class RubyRequest : public Message
           m_htmFromTransaction(false),
           m_htmTransactionUid(0),
           m_isTlbi(false),
-          m_tlbiTransactionUid(0)
+          m_tlbiTransactionUid(0),
+          m_cpuReqType(_cpuReqType),
+          m_coreid(_coreid)
     {
         m_LineAddress = makeLineAddress(m_PhysicalAddress);
     }
@@ -157,7 +165,7 @@ class RubyRequest : public Message
         int _wm_size, std::vector<bool> & _wm_mask,
         DataBlock & _Data,
         std::vector< std::pair<int,AtomicOpFunctor*> > _atomicOps,
-        uint64_t _instSeqNum = 0)
+        uint64_t _instSeqNum = 0, int _cpuReqType = -1, int _coreid=-1)
         : Message(curTime),
           m_PhysicalAddress(_paddr),
           m_Type(_type),
@@ -174,7 +182,9 @@ class RubyRequest : public Message
           m_htmFromTransaction(false),
           m_htmTransactionUid(0),
           m_isTlbi(false),
-          m_tlbiTransactionUid(0)
+          m_tlbiTransactionUid(0),
+          m_cpuReqType(_cpuReqType),
+          m_coreid(_coreid)
     {
         m_LineAddress = makeLineAddress(m_PhysicalAddress);
     }
