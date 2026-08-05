@@ -93,7 +93,22 @@ class Message
     { panic("functionalRead(Packet,WriteMask) not implemented"); }
     virtual bool functionalWrite(Packet *pkt)
     { panic("functionalWrite(Packet) not implemented"); }
-
+    virtual MachineID& getRequestor(){//GAUTAM
+		  panic("getRequestor() not implemented");
+	  }
+    virtual int& getcoreid(){//GAUTAM
+		  panic("getcoreid() not implemented");
+	  }
+    virtual void setcoreid(const int& local_coreid){//GAUTAM
+		  panic("setcoreid() not implemented");
+	  }
+    virtual int& getcpuReqType(){//GAUTAM
+		  panic("getcpuReqType() not implemented");
+	  }
+    virtual const Addr& getaddr() const{//GAUTAM
+      panic("getaddr() not implemented");
+    }
+    
     //! Update the delay this message has experienced so far.
     void updateDelayedTicks(Tick curTime)
     {
