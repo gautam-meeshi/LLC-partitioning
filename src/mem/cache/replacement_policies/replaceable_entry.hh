@@ -120,6 +120,7 @@ class ReplaceableEntry
     {
         return csprintf("set: %#x way: %#x", getSet(), getWay());
     }
+    int coreid;//GAUTAM
 };
 
 } // namespace gem5
