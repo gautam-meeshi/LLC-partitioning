@@ -79,7 +79,11 @@ structure(CoherenceMsg, desc="...", interface="Message") {
   DataBlock DataBlk,            desc="Data for the cache line (if PUTX)";
   bool Dirty, default="false",  desc="Dirty bit";
   PrefetchBit Prefetch,         desc="Is this a prefetch request";
-
+  int coreid;//GAUTAM
+  int cpuReqType;//GAUTAM
+  int depth;//GAUTAM - denotes till which level the request went - 0-L0 1-L1 2-L2 3-Dir
+  int l2id;//GAUTAM - denotes from which LLC it came from
+  
   bool functionalRead(Packet *pkt) {
     // Only PUTX messages contains the data block
     if (Class == CoherenceClass:PUTX) {

@@ -68,6 +68,9 @@ structure(RequestMsg, desc="...", interface="Message") {
   int Len;
   bool Dirty, default="false",  desc="Dirty bit";
   PrefetchBit Prefetch,         desc="Is this a prefetch request";
+  int coreid;//GAUTAM
+  int cpuReqType;//GAUTAM
+  int l2id;//GAUTAM
 
   bool functionalRead(Packet *pkt) {
     // Only PUTX messages contains the data block
@@ -95,7 +98,11 @@ structure(ResponseMsg, desc="...", interface="Message") {
   bool Dirty, default="false",  desc="Dirty bit";
   int AckCount, default="0",  desc="number of acks in this message";
   MessageSizeType MessageSize,  desc="size category of the message";
-
+  int coreid;//GAUTAM
+  int cpuReqType;//GAUTAM
+  int depth;//GAUTAM - till which level this message had gone 0-L0, 1-L1, 2-L2, 3-Dir
+  int l2id;//GAUTAM
+  
   bool functionalRead(Packet *pkt) {
     // Valid data block is only present in message with following types
     if (Type == CoherenceResponseType:DATA ||
