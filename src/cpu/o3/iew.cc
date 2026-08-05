@@ -58,6 +58,7 @@
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
 #include "params/BaseO3CPU.hh"
+#include "sim/space_partitioning.hh"
 
 namespace gem5
 {
@@ -1365,7 +1366,11 @@ IEW::executeInsts()
         if (exeStatus == Idle) {
             exeStatus = Running;
         }
-
+        /** GAUTAM - counting t_cpu for XChange **/
+        if (SpacePartitioning::getSpacePartitioningAlgo()==3) {
+            int coreid = SpacePartitioning::readCoreId(cpu->name());
+            SpacePartitioning::countTCPU(coreid);
+        }
         updatedQueues = true;
 
         cpu->activityThisCycle();
