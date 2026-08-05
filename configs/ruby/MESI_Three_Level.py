@@ -49,11 +49,26 @@ def define_options(parser):
             caches private to clusters")
     parser.add_argument("--l0i_size", type=str, default="4096B")
     parser.add_argument("--l0d_size", type=str, default="4096B")
-    parser.add_argument("--l0i_assoc", type=int, default=1)
-    parser.add_argument("--l0d_assoc", type=int, default=1)
-    parser.add_argument("--l0_transitions_per_cycle", type=int, default=32)
-    parser.add_argument("--l1_transitions_per_cycle", type=int, default=32)
-    parser.add_argument("--l2_transitions_per_cycle", type=int, default=4)
+    parser.add_argument("--l0i_assoc", type=int, default=8)
+    parser.add_argument("--l0d_assoc", type=int, default=8)
+    parser.add_argument("--l0_transitions_per_cycle", type=int, default=1)
+    parser.add_argument("--l1_transitions_per_cycle", type=int, default=1)
+    parser.add_argument("--l2_transitions_per_cycle", type=int, default=1)
+    parser.add_argument("--l0-tag-latency", type=int, default=2,help="Tag letency for l0 cache")
+    parser.add_argument("--l0-data-latency", type=int, default=4,help="data latency for l0 cache")
+    parser.add_argument("--l1-tag-latency", type=int, default=4,help="Tag letency for l1 cache")
+    parser.add_argument("--l1-data-latency", type=int, default=12,help="data latency for l1 cache")
+    parser.add_argument("--l2-tag-latency", type=int, default=10,help="Tag letency for l2 cache")
+    parser.add_argument("--l2-data-latency", type=int, default=40,help="data latency for l2 cache")
+    parser.add_argument("--l0_tb_size", type=int, default=8)
+    parser.add_argument("--l1_tb_size", type=int, default=16)
+    parser.add_argument("--l2_tb_size", type=int, default=32)
+    parser.add_argument("--block_l1_request_from_l2", type=int, default=1)
+    parser.add_argument("--block_l1_response_from_l2", type=int, default=1)
+    parser.add_argument("--block_l1_request_from_l0", type=int, default=1)
+    parser.add_argument("--block_l2_request_from_l1", type=int, default=1)
+    parser.add_argument("--block_l2_unblock_from_l1", type=int, default=1)
+    parser.add_argument("--block_l2_response", type=int, default=1)
     parser.add_argument(
         "--enable-prefetch", action="store_true", default=False,
         help="Enable Ruby hardware prefetcher")
@@ -103,13 +118,15 @@ def create_system(options, full_system, system, dma_ports, bootmem,
                 is_icache = True,
                 start_index_bit = block_size_bits,
                 replacement_policy = LRURP())
-
+            l0i_cache.tagAccessLatency = options.l0_tag_latency#GAUTAM
+            l0i_cache.dataAccessLatency = options.l0_tag_latency
             l0d_cache = L0Cache(size = options.l0d_size,
                 assoc = options.l0d_assoc,
                 is_icache = False,
                 start_index_bit = block_size_bits,
                 replacement_policy = LRURP())
-
+            l0d_cache.tagAccessLatency = options.l0_tag_latency#GAUTAM
+            l0d_cache.dataAccessLatency = options.l0_tag_latency
             clk_domain = cpus[i].clk_domain
 
             # Ruby prefetcher
@@ -131,7 +148,12 @@ def create_system(options, full_system, system, dma_ports, bootmem,
                    send_evictions = send_evicts(options),
                    clk_domain = clk_domain,
                    ruby_system = ruby_system)
-
+            l0_cntrl.number_of_TBEs = options.l0_tb_size#GAUTAM
+            l0_cntrl.data_latency = options.l0_tag_latency#GAUTAM d
+            l0_cntrl.request_latency = options.l0_tag_latency#GAUTAM d
+            l0_cntrl.response_latency = options.l0_tag_latency#GAUTAM d
+            l0_cntrl.tag_latency = options.l0_tag_latency#GAUTAM
+            l0_cntrl.mandatory_queue_latency = options.l0_tag_latency#GAUTAM d
             cpu_seq = RubySequencer(version = i * num_cpus_per_cluster + j,
                                     clk_domain = clk_domain,
                                     dcache = l0d_cache,
@@ -143,13 +165,23 @@ def create_system(options, full_system, system, dma_ports, bootmem,
                                assoc = options.l1d_assoc,
                                start_index_bit = block_size_bits,
                                is_icache = False)
-
+            l1_cache.tagAccessLatency = options.l1_tag_latency#GAUTAM
+            l1_cache.dataAccessLatency = options.l1_data_latency
             l1_cntrl = L1Cache_Controller(
                     version = i * num_cpus_per_cluster + j,
                     cache = l1_cache, l2_select_num_bits = l2_bits,
                     cluster_id = i,
                     transitions_per_cycle = options.l1_transitions_per_cycle,
                     ruby_system = ruby_system)
+            l1_cntrl.number_of_TBEs = options.l1_tb_size#GAUTAM
+            l1_cntrl.data_latency = options.l1_data_latency#GAUTAM
+            l1_cntrl.tag_latency = options.l1_tag_latency#GAUTAM
+            l1_cntrl.l1_request_latency = options.l1_tag_latency
+            l1_cntrl.l1_response_latency = options.l1_data_latency
+            l1_cntrl.to_l2_latency = options.l1_tag_latency
+            l1_cntrl.block_request_from_l2 = options.block_l1_request_from_l2
+            l1_cntrl.block_response_from_l2 = options.block_l1_response_from_l2
+            l1_cntrl.block_request_from_l0 = options.block_l1_request_from_l0
 
             exec("ruby_system.l0_cntrl%d = l0_cntrl"
                  % ( i * num_cpus_per_cluster + j))
@@ -189,14 +221,24 @@ def create_system(options, full_system, system, dma_ports, bootmem,
             l2_cache = L2Cache(size = options.l2_size,
                                assoc = options.l2_assoc,
                                start_index_bit = l2_index_start)
-
+            l2_cache.tagAccessLatency = options.l2_tag_latency#GAUTAM
+            l2_cache.dataAccessLatency = options.l2_data_latency
             l2_cntrl = L2Cache_Controller(
                         version = i * num_l2caches_per_cluster + j,
                         L2cache = l2_cache, cluster_id = i,
                         transitions_per_cycle =\
                          options.l2_transitions_per_cycle,
                         ruby_system = ruby_system)
-
+            l2_cntrl.number_of_TBEs = options.l2_tb_size#GAUTAM
+            l2_cntrl.data_latency = options.l2_data_latency#GAUTAM
+            l2_cntrl.tag_latency = options.l2_tag_latency#GAUTAM
+            l2_cntrl.l2_request_latency = options.l2_tag_latency#GAUTAM
+            l2_cntrl.l2_response_latency = options.l2_data_latency#GAUTAM
+            l2_cntrl.to_l1_latency = options.l2_tag_latency#GAUTAM
+            l2_cntrl.block_l2unblock = options.block_l2_unblock_from_l1
+            l2_cntrl.block_l1request = options.block_l2_request_from_l1
+            l2_cntrl.block_response = options.block_l2_response
+            
             exec("ruby_system.l2_cntrl%d = l2_cntrl"
                  % (i * num_l2caches_per_cluster + j))
             l2_cntrl_nodes.append(l2_cntrl)
