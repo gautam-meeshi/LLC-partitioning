@@ -75,7 +75,7 @@ class BankedArray
     // This is so we don't get aliasing on blocks being replaced
     bool tryAccess(int64_t idx);
 
-    void reserve(int64_t idx);
+    void reserve(int64_t idx, Cycles delay);//GAUTAM
 
     Cycles getLatency() const { return accessLatency; }
 };

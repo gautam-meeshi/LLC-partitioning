@@ -36,14 +36,14 @@ class RubyCache(SimObject):
 
     size = Param.MemorySize("capacity in bytes");
     assoc = Param.Int("");
-    replacement_policy = Param.BaseReplacementPolicy(TreePLRURP(), "")
+    replacement_policy = Param.BaseReplacementPolicy(LRURP(), "")
     start_index_bit = Param.Int(6, "index start, default 6 for 64-byte line");
     is_icache = Param.Bool(False, "is instruction only cache");
     block_size = Param.MemorySize("0B", "block size in bytes. 0 means default RubyBlockSize")
 
     dataArrayBanks = Param.Int(1, "Number of banks for the data array")
     tagArrayBanks = Param.Int(1, "Number of banks for the tag array")
-    dataAccessLatency = Param.Cycles(1, "cycles for a data array access")
+    dataAccessLatency = Param.Cycles(10, "cycles for a data array access")#not being used
     tagAccessLatency = Param.Cycles(1, "cycles for a tag array access")
-    resourceStalls = Param.Bool(False, "stall if there is a resource failure")
+    resourceStalls = Param.Bool(True, "stall if there is a resource failure")#GAUTAM changed False to True
     ruby_system = Param.RubySystem(Parent.any, "")

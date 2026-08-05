@@ -73,15 +73,15 @@ BankedArray::tryAccess(int64_t idx)
 }
 
 void
-BankedArray::reserve(int64_t idx)
-{
+BankedArray::reserve(int64_t idx, Cycles delay)
+{//GAUTAM - changed the function signature, added a parameter delay for giving the caller the control of setting the access latency
     if (accessLatency == 0)
         return;
 
     unsigned int bank = mapIndexToBank(idx);
     assert(bank < banks);
 
-    if (busyBanks[bank].endAccess >= curTick()) {
+    /*if (busyBanks[bank].endAccess >= curTick()) {
         if (busyBanks[bank].startAccess == curTick() &&
              busyBanks[bank].idx == idx) {
             // this is the same reservation (can happen when
@@ -90,12 +90,12 @@ BankedArray::reserve(int64_t idx)
         } else {
             panic("BankedArray reservation error");
         }
-    }
+    }*/
 
     busyBanks[bank].idx = idx;
     busyBanks[bank].startAccess = curTick();
     busyBanks[bank].endAccess = curTick() +
-        (accessLatency-1) * m_ruby_system->clockPeriod();
+        (delay-1) * m_ruby_system->clockPeriod();//GAUTAM - accessLatency is replaced with delay
 }
 
 unsigned int

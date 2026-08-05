@@ -59,6 +59,7 @@
 #include "mem/ruby/system/CacheRecorder.hh"
 #include "params/RubyCache.hh"
 #include "sim/sim_object.hh"
+#include "sim/real.hh"
 
 namespace gem5
 {
@@ -113,6 +114,33 @@ class CacheMemory : public SimObject
     // Returns with the physical address of the conflicting cache line
     Addr cacheProbe(Addr address) const;
 
+/*GAUTAM - LLC functions*/
+    // Returns true if there is:
+    //   a) a tag match on this address or there is
+    //   b) if it has lesser number of ways assigned to core id
+    bool cacheAvail(Addr address, int coreid) const;//GAUTAM changed the func sign
+
+    // find an unused entry and sets the tag appropriate for the address
+    AbstractCacheEntry* allocate(Addr address, AbstractCacheEntry* new_entry, int coreid);//GAUTAM changed the func sign
+
+    // Explicitly free up this address
+    void deallocate(Addr address, int coreid);
+
+    // Returns with the physical address of the conflicting cache line
+    Addr cacheProbe(Addr address, int coreid) const;//GAUTAM changed the func sign
+
+    Tick getCurCycle(void);
+
+    Tick getCpi(int coreid);
+
+    void updateGlobalCp(int coreid, Tick cpi, Tick allocate_time);
+
+    int getL2id(void) const;
+
+    bool isLLC(void);
+
+    /*GAUTAM*/
+
     // looks an address up in the cache
     AbstractCacheEntry* lookup(Addr address);
     const AbstractCacheEntry* lookup(Addr address) const;
@@ -128,6 +156,7 @@ class CacheMemory : public SimObject
 
     // Set this address to most recently used
     void setMRU(Addr address);
+    void setMRU(int coreid, Addr address);//GAUTAM - changed the signature
     void setMRU(Addr addr, int occupancy);
     void setMRU(AbstractCacheEntry* entry);
     int getReplacementWeight(int64_t set, int64_t loc);
@@ -146,8 +175,8 @@ class CacheMemory : public SimObject
     void print(std::ostream& out) const;
     void printData(std::ostream& out) const;
 
-    bool checkResourceAvailable(CacheResourceType res, Addr addr);
-    void recordRequestType(CacheRequestType requestType, Addr addr);
+    bool checkResourceAvailable(CacheResourceType res);//GAUTAM
+    void recordRequestType(CacheRequestType requestType, Addr addr, Cycles latency);//GAUTAM
 
     // hardware transactional memory
     void htmAbortTransaction();
@@ -246,6 +275,8 @@ class CacheMemory : public SimObject
       // each time they are called
       void profileDemandHit();
       void profileDemandMiss();
+      void profileDemandHit(int coreid, Addr address);//GAUTAM
+      void profileDemandMiss(int coreid, Addr address);//GAUTAM
       void profilePrefetchHit();
       void profilePrefetchMiss();
 };
