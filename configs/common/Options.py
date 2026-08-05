@@ -125,7 +125,7 @@ def addNoISAOptions(parser):
     parser.add_argument("--mem-ranks", type=int, default=None,
                         help="number of memory ranks per channel")
     parser.add_argument(
-        "--mem-size", action="store", type=str, default="512MB",
+        "--mem-size", action="store", type=str, default="4095MB",
         help="Specify the physical memory size (single memory)")
     parser.add_argument("--enable-dram-powerdown", action="store_true",
                         help="Enable low-power states in DRAMInterface")
@@ -144,15 +144,27 @@ def addNoISAOptions(parser):
     parser.add_argument("--num-dirs", type=int, default=1)
     parser.add_argument("--num-l2caches", type=int, default=1)
     parser.add_argument("--num-l3caches", type=int, default=1)
-    parser.add_argument("--l1d_size", type=str, default="64kB")
+    parser.add_argument("--l1d_size", type=str, default="256kB")
     parser.add_argument("--l1i_size", type=str, default="32kB")
     parser.add_argument("--l2_size", type=str, default="2MB")
     parser.add_argument("--l3_size", type=str, default="16MB")
-    parser.add_argument("--l1d_assoc", type=int, default=2)
-    parser.add_argument("--l1i_assoc", type=int, default=2)
-    parser.add_argument("--l2_assoc", type=int, default=8)
+    parser.add_argument("--l1d_assoc", type=int, default=8)
+    parser.add_argument("--l1i_assoc", type=int, default=8)
+    parser.add_argument("--l2_assoc", type=int, default=16)
     parser.add_argument("--l3_assoc", type=int, default=16)
     parser.add_argument("--cacheline_size", type=int, default=64)
+    parser.add_argument("--llc_dump_interval", type=int, default=1000000)
+    parser.add_argument("--bw_partitioning_algo", type=int, default=0)
+    parser.add_argument("--bw_partitioning_interval", type=int, default=1400000)
+    parser.add_argument("--dump_stats_after", type=int, default=50000000)
+    parser.add_argument("--space_partitioning_interval", type=int, default=5000000)
+    parser.add_argument("--space_partitioning_algo", type=int, default=0)
+    parser.add_argument("--learning_rate",type=float, default=0.2)
+    parser.add_argument("--discount", type=float, default=0.7)
+    parser.add_argument("--q_file_path", type=str, default="")
+    parser.add_argument("--private_ways", type=int, default=12)
+    parser.add_argument("--max_classes", type=int, default=16)
+    parser.add_argument("--icov_thresh", type=float, default=0.2)
 
     # Enable Ruby
     parser.add_argument("--ruby", action="store_true")
@@ -414,6 +426,11 @@ def addSEOptions(parser):
     # Benchmark options
     parser.add_argument("-c", "--cmd", default="",
                         help="The binary to run in syscall emulation mode.")
+        #garima --cwd added for spec benchmarks cwd
+    # --------------------------------------------------------------------------
+    parser.add_argument("--cwd", default="",
+                      help="Current working directory of the given binary")     # |ARITRA|
+    # --------------------------------------------------------------------------
     parser.add_argument("-o", "--options", default="",
                         help="""The options to pass to the binary, use " "
                               around the entire string""")
