@@ -145,7 +145,8 @@ def setup_memory_controllers(system, ruby, dir_cntrls, options):
 
             if options.access_backing_store:
                 dram_intf.kvm_map=False
-
+            device_size = int(options.mem_size[:-2])//16#GAUTAM
+            mem_ctrl.dram.device_size = str(int(device_size))+'MB'#GAUTAM
             mem_ctrls.append(mem_ctrl)
             dir_ranges.append(dram_intf.range)
 
