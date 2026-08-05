@@ -58,6 +58,7 @@
 #include "mem/ruby/slicc_interface/RubySlicc_Util.hh"
 #include "mem/ruby/system/RubySystem.hh"
 #include "sim/system.hh"
+#include "sim/space_partitioning.hh"//GAUTAM
 
 namespace gem5
 {
@@ -544,6 +545,40 @@ Sequencer::writeCallback(Addr address, DataBlock& data,
     }
 }
 
+/*GAUTAM*/
+void
+Sequencer::readCallback(Addr address, DataBlock& data, int depth, int llc,
+                        bool externalHit, const MachineType mach,
+                        Cycles initialRequestTime,
+                        Cycles forwardRequestTime,
+                        Cycles firstResponseTime)
+{
+    //get the response time
+    if(depth >1 && SpacePartitioning::getSpacePartitioningAlgo() == 3){
+        //XChange needs the hit, miss latency
+        assert(address == makeLineAddress(address));
+        assert(m_RequestTable.find(address) != m_RequestTable.end());
+        auto &seq_req_list = m_RequestTable[address];
+        if (!seq_req_list.empty()) {
+            SequencerRequest &seq_req = seq_req_list.front();
+            Cycles issued_time = seq_req.issue_time;
+            Cycles completion_time = curCycle();
+
+            assert(curCycle() >= issued_time);
+            Cycles total_lat = completion_time - issued_time;
+            Tick lat_int = cyclesToTicks(total_lat)/500;
+            if(depth == 2){//LLC hit
+                SpacePartitioning::recordHitLatency(llc,real::getCoreFromSequencerName(this->name()), lat_int);
+            }else if(depth == 3){//LLC miss
+                SpacePartitioning::recordMissLatency(llc,real::getCoreFromSequencerName(this->name()), lat_int);
+            }
+        }
+    }
+    readCallback(address, data, externalHit, mach, initialRequestTime, forwardRequestTime, firstResponseTime);
+
+}
+/*GAUTAM*/
+
 void
 Sequencer::readCallback(Addr address, DataBlock& data,
                         bool externalHit, const MachineType mach,
@@ -866,13 +901,31 @@ Sequencer::makeRequest(PacketPtr pkt)
 
 void
 Sequencer::issueRequest(PacketPtr pkt, RubyRequestType secondary_type)
-{
+{   
+    /*GAUTAM*/
+    int cpuReqType = 0;
+    int coreid = real::getCoreFromSequencerName(this->name());
+    switch (secondary_type){//REAL wants to know want kind of  request it is
+        case RubyRequestType_LD:
+            cpuReqType=1;
+            break;
+        case RubyRequestType_IFETCH:
+            cpuReqType=3;
+            break;
+        case RubyRequestType_ST:
+            cpuReqType=2;
+            break;
+        default:
+            cpuReqType=0;
+            break;
+    }
+    /*GAUTAM*/
     assert(pkt != NULL);
     ContextID proc_id = pkt->req->hasContextId() ?
         pkt->req->contextId() : InvalidContextID;
 
     ContextID core_id = coreId();
-
+    //std::cout<<"Sequencer coreid "<<real::getCoreFromSequencerName(this->name())<<'\n';
     // If valid, copy the pc to the ruby request
     Addr pc = 0;
     if (pkt->req->hasPC()) {
@@ -886,7 +939,7 @@ Sequencer::issueRequest(PacketPtr pkt, RubyRequestType secondary_type)
         msg = std::make_shared<RubyRequest>(clockEdge(),
                                             pc, secondary_type,
                                             RubyAccessMode_Supervisor, pkt,
-                                            proc_id, core_id);
+                                            proc_id, core_id, cpuReqType, coreid);
 
         DPRINTFR(ProtocolTrace, "%15s %3s %10s%20s %6s>%-6s %s\n",
                 curTick(), m_version, "Seq", "Begin", "", "",
@@ -913,7 +966,7 @@ Sequencer::issueRequest(PacketPtr pkt, RubyRequestType secondary_type)
         msg = std::make_shared<RubyRequest>(clockEdge(), pkt->getAddr(),
                                             pkt->getSize(), pc, secondary_type,
                                             RubyAccessMode_Supervisor, pkt,
-                                            PrefetchBit_No, proc_id, core_id);
+                                            PrefetchBit_No, proc_id, core_id, cpuReqType, coreid);
 
         DPRINTFR(ProtocolTrace, "%15s %3s %10s%20s %6s>%-6s %#x %s\n",
                 curTick(), m_version, "Seq", "Begin", "", "",
