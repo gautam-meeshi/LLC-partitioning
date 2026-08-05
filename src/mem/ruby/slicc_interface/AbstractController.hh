@@ -338,7 +338,7 @@ class AbstractController : public ClockedObject, public Consumer
     void wakeUpAllBuffers(Addr addr);
     void wakeUpAllBuffers();
     bool serviceMemoryQueue();
-
+    void scheduleWakeup(Cycles latency);//GAUTAM
   protected:
     const NodeID m_version;
     MachineID m_machineID;

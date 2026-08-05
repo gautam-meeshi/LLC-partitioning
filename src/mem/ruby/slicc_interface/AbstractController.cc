@@ -316,6 +316,11 @@ AbstractController::serviceMemoryQueue()
     return true;
 }
 
+void 
+AbstractController::scheduleWakeup(Cycles latency){//GAUTAM
+	scheduleEvent(latency);
+}
+
 void
 AbstractController::blockOnQueue(Addr addr, MessageBuffer* port)
 {
