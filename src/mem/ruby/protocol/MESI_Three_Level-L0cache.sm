@@ -42,8 +42,10 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
  : Sequencer * sequencer;
    CacheMemory * Icache;
    CacheMemory * Dcache;
-   Cycles request_latency := 2;
-   Cycles response_latency := 2;
+   Cycles request_latency := 4;
+   Cycles response_latency := 4;
+   Cycles data_latency := 4;
+   Cycles tag_latency := 2;
    bool send_evictions;
 
    RubyPrefetcher * prefetcher;
@@ -151,6 +153,8 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
     DataBlock DataBlk,       desc="data for the block";
     bool Dirty, default="false",   desc="data is dirty";
     bool isPrefetched, default="false", desc="Set if this block was prefetched";
+    int depth, default=0,         desc="depth till which the request went";
+    int l2id, default=100,     desc="From which l2 this came";
   }
 
   // TBE fields
@@ -308,7 +312,7 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
   out_port(optionalQueue_out, RubyRequest, prefetchQueue);
 
   void enqueuePrefetch(Addr address, RubyRequestType type) {
-    enqueue(optionalQueue_out, RubyRequest, 1) {
+    enqueue(optionalQueue_out, RubyRequest, tag_latency) {
       out_msg.LineAddress := address;
       out_msg.Type := type;
       out_msg.Prefetch := PrefetchBit:Yes;
@@ -555,6 +559,8 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
                 address, out_msg.Dest);
         out_msg.MessageSize := MessageSizeType:Control;
         out_msg.AccessMode := in_msg.AccessMode;
+        out_msg.coreid := in_msg.coreid;//GAUTAM
+        out_msg.cpuReqType := in_msg.cpuReqType;//GAUTAM
       }
     }
   }
@@ -572,6 +578,8 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
                 address, out_msg.Dest);
         out_msg.MessageSize := MessageSizeType:Control;
         out_msg.AccessMode := in_msg.AccessMode;
+        out_msg.coreid := in_msg.coreid;//GAUTAM
+        out_msg.cpuReqType := in_msg.cpuReqType;//GAUTAM
       }
     }
   }
@@ -588,6 +596,8 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
                 address, out_msg.Dest);
         out_msg.MessageSize := MessageSizeType:Control;
         out_msg.AccessMode := in_msg.AccessMode;
+        out_msg.coreid := in_msg.coreid;//GAUTAM
+        out_msg.cpuReqType := in_msg.cpuReqType;//GAUTAM
       }
     }
   }
@@ -606,7 +616,7 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
     cache_entry.Dirty := false;
   }
 
-  action(fi_sendInvAck, "fi", desc="Send data to the L1 cache") {
+  action(fi_sendInvAck, "fi", desc="Send Inv ack to the L1 cache") {
     peek(messgeBuffer_in, CoherenceMsg) {
       enqueue(requestNetwork_out, CoherenceMsg, response_latency) {
         out_msg.addr := address;
@@ -664,7 +674,7 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
     assert(is_valid(cache_entry));
     DPRINTF(RubySlicc, "%s\n", cache_entry.DataBlk);
     Dcache.setMRU(cache_entry);
-    sequencer.readCallback(address, cache_entry.DataBlk, true);
+    sequencer.readCallback(address, cache_entry.DataBlk, cache_entry.depth, cache_entry.l2id, true);//GAUTAM
   }
 
   // The action name uses a counterintuitive _hit prefix when it is only
@@ -674,7 +684,7 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
     assert(is_valid(cache_entry));
     DPRINTF(RubySlicc, "%s\n", cache_entry.DataBlk);
     Icache.setMRU(cache_entry);
-    sequencer.readCallback(address, cache_entry.DataBlk, true);
+    sequencer.readCallback(address, cache_entry.DataBlk, cache_entry.depth, cache_entry.l2id, true);
   }
 
   action(hh_store_hit, "\h", desc="Notify sequencer that store completed (cache hit)") {
@@ -730,6 +740,8 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
     peek(messgeBuffer_in, CoherenceMsg) {
       assert(is_valid(cache_entry));
       cache_entry.DataBlk := in_msg.DataBlk;
+      cache_entry.depth := in_msg.depth;//GAUTAM
+      cache_entry.l2id := in_msg.l2id;//GAUTAM
     }
   }
 
@@ -737,6 +749,8 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
     peek(messgeBuffer_in, CoherenceMsg) {
       assert(is_valid(cache_entry));
       cache_entry.DataBlk := in_msg.DataBlk;
+      cache_entry.depth := in_msg.depth;//GAUTAM
+      cache_entry.l2id := in_msg.l2id;//GAUTAM
     }
   }
 
@@ -807,6 +821,8 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
         out_msg.MessageSize := MessageSizeType:Control;
         out_msg.Prefetch := in_msg.Prefetch;
         out_msg.AccessMode := in_msg.AccessMode;
+        out_msg.coreid := in_msg.coreid;//GAUTAM
+        out_msg.cpuReqType := in_msg.cpuReqType;//GAUTAM
       }
     }
   }
@@ -825,6 +841,8 @@ machine(MachineType:L0Cache, "MESI Directory L0 Cache")
         out_msg.MessageSize := MessageSizeType:Control;
         out_msg.Prefetch := in_msg.Prefetch;
         out_msg.AccessMode := in_msg.AccessMode;
+        out_msg.coreid := in_msg.coreid;//GAUTAM
+        out_msg.cpuReqType := in_msg.cpuReqType;//GAUTAM
       }
     }
   }

@@ -291,10 +291,17 @@ machine(MachineType:Directory, "MESI Two Level directory protocol")
   }
 
   action(j_popIncomingRequestQueue, "j", desc="Pop incoming request queue") {
+    requestNetwork_in.incrementIfetchDRAM();//GAUTAM
+    peek(requestNetwork_in, RequestMsg) {//GAUTAM
+      requestNetwork_in.recordOffChipMsg(in_msg.l2id);
+    }
     requestNetwork_in.dequeue(clockEdge());
   }
 
   action(k_popIncomingResponseQueue, "k", desc="Pop incoming request queue") {
+    peek(responseNetwork_in, ResponseMsg) {//GAUTAM
+      responseNetwork_in.recordOffChipMsg(in_msg.l2id);
+    }
     responseNetwork_in.dequeue(clockEdge());
   }
 

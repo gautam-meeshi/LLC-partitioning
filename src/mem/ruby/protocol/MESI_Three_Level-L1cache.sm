@@ -41,9 +41,14 @@
 machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
  : CacheMemory * cache;
    int l2_select_num_bits;
-   Cycles l1_request_latency := 2;
-   Cycles l1_response_latency := 2;
-   Cycles to_l2_latency := 1;
+   Cycles l1_request_latency := 4;
+   Cycles l1_response_latency := 12;
+   Cycles to_l2_latency := 4;
+   Cycles data_latency := 12;//GAUTAM
+   Cycles tag_latency := 4;//GAUTAM
+   int block_request_from_l2 := 1;//GAUTAM
+   int block_response_from_l2 := 1;//GAUTAM
+   int block_request_from_l0 := 1;//GAUTAM
 
    // Message Buffers between the L1 and the L0 Cache
    // From the L1 cache to the L0 cache
@@ -147,6 +152,8 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     State CacheState,        desc="cache state";
     DataBlock DataBlk,       desc="data for the block";
     bool Dirty, default="false",   desc="data is dirty";
+    int depth, default=1,    desc="depth till which the request went";//GAUTAM
+    int l2id, default=100,     desc="From which l2 this came";//GAUTAM
   }
 
   // TBE fields
@@ -178,6 +185,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
   void wakeUpBuffers(Addr a);
   void wakeUpAllBuffers(Addr a);
   void profileMsgDelay(int virtualNetworkType, Cycles c);
+  void scheduleWakeup(Cycles latency);//GAUTAM
 
   // inclusive cache returns L1 entries only
   Entry getCacheEntry(Addr addr), return_by_pointer="yes" {
@@ -287,6 +295,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
 
   // Response From the L2 Cache to this L1 cache
   in_port(responseNetwork_in, ResponseMsg, responseFromL2, rank = 2) {
+  	if(block_request_from_l2==0 || cache.checkResourceAvailable(CacheResourceType:DataArray)){//GAUTAM
     if (responseNetwork_in.isReady(clockEdge())) {
       peek(responseNetwork_in, ResponseMsg) {
         assert(in_msg.Destination.isElement(machineID));
@@ -321,10 +330,14 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
         }
       }
     }
+    }else{//GAUTAM
+    	scheduleWakeup(data_latency);//GAUTAM
+    }
   }
 
   // Request to this L1 cache from the shared L2
   in_port(requestNetwork_in, RequestMsg, requestFromL2, rank = 1) {
+  	if(block_response_from_l2==0 || cache.checkResourceAvailable(CacheResourceType:DataArray)){//GAUTAM
     if(requestNetwork_in.isReady(clockEdge())) {
       peek(requestNetwork_in, RequestMsg) {
         assert(in_msg.Destination.isElement(machineID));
@@ -358,10 +371,14 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
         }
       }
     }
+    }else{
+    	scheduleWakeup(data_latency);//GAUTAM
+    }
   }
 
   // Requests to this L1 cache from the L0 cache.
   in_port(messageBufferFromL0_in, CoherenceMsg, bufferFromL0, rank = 0) {
+  	if(block_request_from_l0==0 || cache.checkResourceAvailable(CacheResourceType:DataArray)){//GAUTAM
     if (messageBufferFromL0_in.isReady(clockEdge())) {
       peek(messageBufferFromL0_in, CoherenceMsg) {
         Entry cache_entry := getCacheEntry(in_msg.addr);
@@ -403,9 +420,20 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
         }
       }
     }
+    }else{
+    	scheduleWakeup(tag_latency);//GAUTAM
+    }
   }
 
   // ACTIONS
+  action(incurTagLatency,"tl", desc="Incur tag access latency at LLC"){
+    cache.recordRequestType(CacheRequestType:DataArrayRead, address, tag_latency);//GAUTAM
+  }
+
+  action(incurDataLatency,"dl", desc="Incur data access latency at LLC"){
+    cache.recordRequestType(CacheRequestType:DataArrayRead, address, data_latency);//GAUTAM
+  }
+
   action(a_issueGETS, "a", desc="Issue GETS") {
     peek(messageBufferFromL0_in, CoherenceMsg) {
       enqueue(requestNetwork_out, RequestMsg, l1_request_latency) {
@@ -419,6 +447,8 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
         out_msg.MessageSize := MessageSizeType:Control;
         out_msg.AccessMode := in_msg.AccessMode;
         out_msg.Prefetch := in_msg.Prefetch;
+        out_msg.coreid := in_msg.coreid;//GAUTAM
+        out_msg.cpuReqType := in_msg.cpuReqType;//GAUTAM
       }
     }
   }
@@ -437,6 +467,8 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
         out_msg.MessageSize := MessageSizeType:Control;
         out_msg.AccessMode := in_msg.AccessMode;
         out_msg.Prefetch := in_msg.Prefetch;
+        out_msg.coreid := in_msg.coreid;//GAUTAM
+        out_msg.cpuReqType := in_msg.cpuReqType;//GAUTAM
       }
     }
   }
@@ -454,6 +486,8 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
         out_msg.MessageSize := MessageSizeType:Control;
         out_msg.AccessMode := in_msg.AccessMode;
         out_msg.Prefetch := in_msg.Prefetch;
+        out_msg.coreid := in_msg.coreid;//GAUTAM
+        out_msg.cpuReqType := in_msg.cpuReqType;//GAUTAM
       }
     }
   }
@@ -469,6 +503,8 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
         out_msg.Sender := machineID;
         out_msg.Destination.add(in_msg.Requestor);
         out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.depth := 1;//GAUTAM
+        out_msg.l2id := cache_entry.l2id;//GAUTAM
       }
     }
   }
@@ -604,6 +640,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
       } else {
         out_msg.MessageSize := MessageSizeType:Writeback_Control;
       }
+      out_msg.cpuReqType := 2;//GAUTAM
     }
   }
 
@@ -642,6 +679,9 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
           out_msg.Dest := createMachineID(MachineType:L0Cache, version);
           out_msg.DataBlk := cache_entry.DataBlk;
           out_msg.MessageSize := MessageSizeType:Response_Data;
+          out_msg.depth := cache_entry.depth;//GAUTAM
+          out_msg.l2id := cache_entry.l2id;//GAUTAM
+          cache_entry.depth := 1;//GAUTAM
       }
 
       cache.setMRU(address);
@@ -660,6 +700,9 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
           out_msg.MessageSize := MessageSizeType:Response_Data;
 
           //cache_entry.Dirty := true;
+          out_msg.depth := cache_entry.depth;//GAUTAM
+          out_msg.l2id := cache_entry.l2id;//GAUTAM
+          cache_entry.depth := 1;//GAUTAM
       }
 
       cache.setMRU(address);
@@ -676,6 +719,9 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
           out_msg.DataBlk := cache_entry.DataBlk;
           out_msg.Dirty := cache_entry.Dirty;
           out_msg.MessageSize := MessageSizeType:Response_Data;
+          out_msg.depth := cache_entry.depth;//GAUTAM
+          out_msg.l2id := cache_entry.l2id;//GAUTAM
+          cache_entry.depth := 1;//GAUTAM
        }
    }
 
@@ -724,6 +770,8 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
       assert(is_valid(cache_entry));
       cache_entry.DataBlk := in_msg.DataBlk;
       cache_entry.Dirty := in_msg.Dirty;
+      cache_entry.depth := in_msg.depth;//GAUTAM
+      cache_entry.l2id := in_msg.l2id;//GAUTAM
     }
   }
 
@@ -798,6 +846,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     a_issueGETS;
     uu_profileMiss;
     k_popL0RequestQueue;
+    incurTagLatency;
   }
 
   transition(I, Store, IM) {
@@ -806,11 +855,13 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     b_issueGETX;
     uu_profileMiss;
     k_popL0RequestQueue;
+    incurTagLatency;
   }
 
   transition(I, Inv) {
     fi_sendInvAck;
     l_popL2RequestQueue;
+    incurTagLatency;
   }
 
   // Transitions from Shared
@@ -818,6 +869,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     h_data_to_l0;
     uu_profileHit;
     k_popL0RequestQueue;
+    incurDataLatency;
   }
 
   transition({S,SS}, Store, SM) {
@@ -825,24 +877,29 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     c_issueUPGRADE;
     uu_profileMiss;
     k_popL0RequestQueue;
+    incurTagLatency;
   }
 
   transition(SS, L1_Replacement, I) {
     ff_deallocateCacheBlock;
+    incurTagLatency;
   }
 
   transition(S, L0_Invalidate_Own, S_IL0) {
     forward_eviction_to_L0_own;
+    incurTagLatency;
   }
 
   transition(S, L0_Invalidate_Else, S_IL0) {
     forward_eviction_to_L0_else;
+    incurTagLatency;
   }
 
   transition(SS, Inv, I) {
     fi_sendInvAck;
     ff_deallocateCacheBlock;
     l_popL2RequestQueue;
+    incurTagLatency;
   }
 
   // Transitions from Exclusive
@@ -851,6 +908,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     hh_xdata_to_l0;
     uu_profileHit;
     k_popL0RequestQueue;
+    incurDataLatency;
   }
 
   transition(EE, L1_Replacement, M_I) {
@@ -858,6 +916,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     i_allocateTBE;
     g_issuePUTX;   // send data, but hold in case forwarded request
     ff_deallocateCacheBlock;
+    incurTagLatency;
   }
 
   transition(EE, Inv, I) {
@@ -865,26 +924,31 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     fi_sendInvAck;
     ff_deallocateCacheBlock;
     l_popL2RequestQueue;
+    incurTagLatency;
   }
 
   transition(EE, Fwd_GETX, I) {
     d_sendDataToRequestor;
     ff_deallocateCacheBlock;
     l_popL2RequestQueue;
+    incurDataLatency;
   }
 
   transition(EE, Fwd_GETS, SS) {
     d_sendDataToRequestor;
     d2_sendDataToL2;
     l_popL2RequestQueue;
+    incurDataLatency;
   }
 
   transition(E, L0_Invalidate_Own, E_IL0) {
     forward_eviction_to_L0_own;
+    incurTagLatency;
   }
 
   transition(E, L0_Invalidate_Else, E_IL0) {
     forward_eviction_to_L0_else;
+    incurTagLatency;
   }
 
   // Transitions from Modified
@@ -892,11 +956,13 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     i_allocateTBE;
     g_issuePUTX;   // send data, but hold in case forwarded request
     ff_deallocateCacheBlock;
+    incurTagLatency;
   }
 
   transition({M,E}, WriteBack, MM) {
     u_writeDataFromL0Request;
     k_popL0RequestQueue;
+    incurDataLatency;
   }
 
   transition(M_I, WB_Ack, I) {
@@ -904,54 +970,64 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     o_popL2ResponseQueue;
     ff_deallocateCacheBlock;
     kd_wakeUpDependents;
+    incurTagLatency;
   }
 
   transition(MM, Inv, I) {
     f_sendDataToL2;
     ff_deallocateCacheBlock;
     l_popL2RequestQueue;
+    incurDataLatency;
   }
 
   transition(M_I, Inv, SINK_WB_ACK) {
     ft_sendDataToL2_fromTBE;
     l_popL2RequestQueue;
+    incurDataLatency;
   }
 
   transition(MM, Fwd_GETX, I) {
     d_sendDataToRequestor;
     ff_deallocateCacheBlock;
     l_popL2RequestQueue;
+    incurDataLatency;
   }
 
   transition(MM, Fwd_GETS, SS) {
     d_sendDataToRequestor;
     d2_sendDataToL2;
     l_popL2RequestQueue;
+    incurDataLatency;
   }
 
   transition(M, L0_Invalidate_Own, M_IL0) {
     forward_eviction_to_L0_own;
+    incurTagLatency;
   }
 
   transition(M, L0_Invalidate_Else, M_IL0) {
     forward_eviction_to_L0_else;
+    incurTagLatency;
   }
 
   transition(M_I, Fwd_GETX, SINK_WB_ACK) {
     dt_sendDataToRequestor_fromTBE;
     l_popL2RequestQueue;
+    incurDataLatency;
   }
 
   transition(M_I, Fwd_GETS, SINK_WB_ACK) {
     dt_sendDataToRequestor_fromTBE;
     d2t_sendDataToL2_fromTBE;
     l_popL2RequestQueue;
+    incurDataLatency;
   }
 
   // Transitions from IS
   transition({IS,IS_I}, Inv, IS_I) {
     fi_sendInvAck;
     l_popL2RequestQueue;
+    incurTagLatency;
   }
 
   transition(IS, Data_all_Acks, S) {
@@ -960,6 +1036,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     s_deallocateTBE;
     o_popL2ResponseQueue;
     kd_wakeUpDependents;
+    incurDataLatency;
   }
 
   transition(IS_I, Data_all_Acks, I) {
@@ -969,6 +1046,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     ff_deallocateCacheBlock;
     o_popL2ResponseQueue;
     kd_wakeUpDependents;
+    incurDataLatency;
   }
 
   transition(IS, DataS_fromL1, S) {
@@ -978,6 +1056,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     s_deallocateTBE;
     o_popL2ResponseQueue;
     kd_wakeUpDependents;
+    incurDataLatency;
   }
 
   transition(IS_I, DataS_fromL1, I) {
@@ -988,6 +1067,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     ff_deallocateCacheBlock;
     o_popL2ResponseQueue;
     kd_wakeUpDependents;
+    incurDataLatency;
   }
 
   // directory is blocked when sending exclusive data
@@ -998,6 +1078,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     s_deallocateTBE;
     o_popL2ResponseQueue;
     kd_wakeUpDependents;
+    incurDataLatency;
   }
 
   // Transitions from IM
@@ -1010,6 +1091,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     u_writeDataFromL2Response;
     q_updateAckCount;
     o_popL2ResponseQueue;
+    incurDataLatency;
   }
 
   transition(IM, Data_all_Acks, M) {
@@ -1019,11 +1101,13 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     s_deallocateTBE;
     o_popL2ResponseQueue;
     kd_wakeUpDependents;
+    incurDataLatency;
   }
 
   transition({SM, IM}, Ack) {
     q_updateAckCount;
     o_popL2ResponseQueue;
+    incurTagLatency;
   }
 
   transition(SM, Ack_all, M) {
@@ -1032,15 +1116,18 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     s_deallocateTBE;
     o_popL2ResponseQueue;
     kd_wakeUpDependents;
+    incurDataLatency;
   }
 
   transition(SM, {Inv,L0_Invalidate_Else}, SM_IL0) {
     forward_eviction_to_L0_else;
+    incurTagLatency;
   }
 
   transition(SINK_WB_ACK, Inv){
     fi_sendInvAck;
     l_popL2RequestQueue;
+    incurTagLatency;
   }
 
   transition(SINK_WB_ACK, WB_Ack, I){
@@ -1048,50 +1135,60 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     o_popL2ResponseQueue;
     ff_deallocateCacheBlock;
     kd_wakeUpDependents;
+    incurTagLatency;
   }
 
   transition({M_IL0, E_IL0}, WriteBack, MM_IL0) {
     u_writeDataFromL0Request;
     k_popL0RequestQueue;
     kd_wakeUpDependents;
+    incurDataLatency;
   }
 
   transition({M_IL0, E_IL0}, L0_DataAck, MM) {
     u_writeDataFromL0Response;
     k_popL0RequestQueue;
     kd_wakeUpDependents;
+    incurDataLatency;
   }
 
   transition({M_IL0, MM_IL0}, L0_Ack, MM) {
     k_popL0RequestQueue;
     kd_wakeUpDependents;
+    incurTagLatency;
   }
 
   transition(E_IL0, L0_Ack, EE) {
     k_popL0RequestQueue;
     kd_wakeUpDependents;
+    incurTagLatency;
   }
 
   transition(S_IL0, L0_Ack, SS) {
     k_popL0RequestQueue;
     kd_wakeUpDependents;
+    incurTagLatency;
   }
 
   transition(SM_IL0, L0_Ack, IM) {
     k_popL0RequestQueue;
     kd_wakeUpDependents;
+    incurTagLatency;
   }
 
   transition({S_IL0, M_IL0, E_IL0, SM_IL0, SM}, L0_Invalidate_Own) {
     z0_stallAndWaitL0Queue;
+    incurTagLatency;
   }
 
   transition({S_IL0, M_IL0, E_IL0, SM_IL0}, L0_Invalidate_Else) {
     z2_stallAndWaitL2Queue;
+    incurTagLatency;
   }
 
   transition({S_IL0, M_IL0, E_IL0, MM_IL0}, {Inv, Fwd_GETX, Fwd_GETS}) {
     z2_stallAndWaitL2Queue;
+    incurTagLatency;
   }
 
   // hardware transactional memory
@@ -1102,6 +1199,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     hh_xdata_to_l0;
     uu_profileHit;
     k_popL0RequestQueue;
+    incurDataLatency;
   }
 
   // If a transaction has aborted, the L0 could re-request
@@ -1110,6 +1208,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     hh_xdata_to_l0;
     uu_profileHit;
     k_popL0RequestQueue;
+    incurDataLatency;
   }
 
   // If a transaction has aborted, the L0 could re-request
@@ -1118,6 +1217,7 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
     hh_xdata_to_l0;
     uu_profileHit;
     k_popL0RequestQueue;
+    incurDataLatency;
   }
 
   // A transaction may have tried to modify a cache block in M state with
@@ -1126,11 +1226,13 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
   transition({M,E}, L0_DataCopy, M) {
     u_writeDataFromL0Request;
     k_popL0RequestQueue;
+    incurDataLatency;
   }
 
   transition({M_IL0, E_IL0}, L0_DataCopy, M_IL0) {
     u_writeDataFromL0Request;
     k_popL0RequestQueue;
+    incurDataLatency;
   }
 
   // A NAK from the L0 means that the L0 invalidated its
@@ -1139,9 +1241,11 @@ machine(MachineType:L1Cache, "MESI Directory L1 Cache CMP")
   transition({M_IL0, E_IL0}, L0_DataNak, MM) {
     k_popL0RequestQueue;
     kd_wakeUpDependents;
+    incurTagLatency;
   }
 
   transition(I, L1_Replacement) {
     ff_deallocateCacheBlock;
+    incurTagLatency;
   }
 }

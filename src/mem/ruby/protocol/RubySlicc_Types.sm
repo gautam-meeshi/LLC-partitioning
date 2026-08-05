@@ -72,6 +72,10 @@ structure(InPort, external = "yes", primitive="yes") {
   bool isStallMapEmpty();
   int getStallMapSize();
   bool hasStalledMsg(Addr addr);
+  void rearrange();//GAUTAM
+  void incrementIfetchDRAM();//GAUTAM
+  void incrementIfetchLLC();//GAUTAM
+  void recordOffChipMsg(int llc);//GAUTAM
 }
 
 external_type(NodeID, default="0", primitive="yes");
@@ -128,6 +132,7 @@ structure (NetDest, external = "yes", non_obj="yes") {
 structure (Sequencer, external = "yes") {
   void readCallback(Addr, DataBlock);
   void readCallback(Addr, DataBlock, bool);
+  void readCallback(Addr, DataBlock, int, int, bool);//GAUTAM
   void readCallback(Addr, DataBlock, bool, MachineType);
   void readCallback(Addr, DataBlock, bool, MachineType,
                     Cycles, Cycles, Cycles);
@@ -177,7 +182,8 @@ structure(RubyRequest, desc="...", interface="Message", external="yes") {
   int htmTransactionUid,     desc="Used to identify the unique HTM transaction that produced this request";
   bool isTlbi,               desc="Memory request is a TLB shootdown (invalidation) operation";
   Addr tlbiTransactionUid,   desc="Unique identifier of the TLB shootdown operation that produced this request";
-
+  int cpuReqType,           desc="denotes cpu req type LD/ST/IFETCH ..";//GAUTAM
+  int coreid,           desc="denotes cpu req type LD/ST/IFETCH ..";//GAUTAM
   RequestPtr getRequestPtr();
 }
 
@@ -196,10 +202,13 @@ structure (DirectoryMemory, external = "yes") {
 
 structure (CacheMemory, external = "yes") {
   bool cacheAvail(Addr);
+  bool cacheAvail(Addr, int);//GAUTAM
   Addr cacheProbe(Addr);
+  Addr cacheProbe(Addr, int);//GAUTAM
   AbstractCacheEntry getNullEntry();
   AbstractCacheEntry allocate(Addr, AbstractCacheEntry);
   AbstractCacheEntry allocate(Addr, AbstractCacheEntry, bool);
+  AbstractCacheEntry allocate(Addr, AbstractCacheEntry, int);//GAUTAM added this function decl
   void allocateVoid(Addr, AbstractCacheEntry);
   void deallocate(Addr);
   AbstractCacheEntry lookup(Addr);
@@ -209,8 +218,10 @@ structure (CacheMemory, external = "yes") {
   void setMRU(Addr);
   void setMRU(Addr, int);
   void setMRU(AbstractCacheEntry);
-  void recordRequestType(CacheRequestType, Addr);
-  bool checkResourceAvailable(CacheResourceType, Addr);
+  void setMRU(int, Addr);//GAUTAM
+  void recordRequestType(CacheRequestType, Addr, Cycles);//GAUTAM
+  bool checkResourceAvailable(CacheResourceType);//GAUTAM
+  int getL2id();//GAUTAM
 
   // hardware transactional memory
   void htmCommitTransaction();
@@ -222,8 +233,13 @@ structure (CacheMemory, external = "yes") {
 
   void profileDemandHit();
   void profileDemandMiss();
+  void profileDemandHit(int, Addr);//GAUTAM
+  void profileDemandMiss(int, Addr);//GAUTAM
   void profilePrefetchHit();
   void profilePrefetchMiss();
+  void updateGlobalCp(int, Tick, Tick);//GAUTAM
+  Tick getCurCycle();//GAUTAM
+  Tick getCpi(int);//GAUTAM
 }
 
 structure (WireBuffer, inport="yes", outport="yes", external = "yes") {
