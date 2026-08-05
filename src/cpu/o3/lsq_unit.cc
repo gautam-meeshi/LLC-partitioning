@@ -55,6 +55,7 @@
 #include "debug/O3PipeView.hh"
 #include "mem/packet.hh"
 #include "mem/request.hh"
+#include "sim/real.hh"
 
 namespace gem5
 {
@@ -1148,6 +1149,17 @@ LSQUnit::completeStore(typename StoreQueue::iterator store_idx)
     /* We 'need' a copy here because we may clear the entry from the
      * store queue. */
     DynInstPtr store_inst = store_idx->instruction();
+     /* GAUTAM - when an entry is popped */
+    if (real::isBandwidthPartitioningOn()) {
+        if (curTick() - prevCompleteStoreTick > 500*74) {
+            //it is an LLC access
+            real::incrementStoreLLC(store_inst->physEffAddr, this->name());
+        } else {
+            real::incrementStoreNonLLC(store_inst->physEffAddr, this->name());
+        }
+        prevCompleteStoreTick = gem5::curTick();
+    }
+
     if (store_idx == storeQueue.begin()) {
         do {
             storeQueue.front().clear();

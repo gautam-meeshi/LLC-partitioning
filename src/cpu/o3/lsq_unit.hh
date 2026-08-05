@@ -375,7 +375,9 @@ class LSQUnit
 
     /** Completes the store at the specified index. */
     void completeStore(typename StoreQueue::iterator store_idx);
+    Tick prevCompleteStoreTick = 0;
 
+    //GAUTAM tick when the previous complete Store happened
     /** Handles completing the send of a store to memory. */
     void storePostSend();
 

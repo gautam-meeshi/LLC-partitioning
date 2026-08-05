@@ -316,7 +316,12 @@ class ROB
   public:
     /** Number of instructions in the ROB. */
     int numInstsInROB;
-
+    /** GAUTAM number of LLC accesses **/
+    int real_numLLC;
+    /** GAUTAM number of non_LLC accesses**/
+    int real_non_LLC;
+    /** GAUTAM tick when the latest retire happened**/
+    Tick prev_tick;
     /** Dummy instruction returned if there are no insts left. */
     DynInstPtr dummyInst;
 

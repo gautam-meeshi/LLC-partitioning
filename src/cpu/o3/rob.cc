@@ -48,6 +48,7 @@
 #include "debug/Fetch.hh"
 #include "debug/ROB.hh"
 #include "params/BaseO3CPU.hh"
+#include "sim/real.hh"
 
 namespace gem5
 {
@@ -241,6 +242,20 @@ ROB::retireHead(ThreadID tid)
     InstIt head_it = instList[tid].begin();
 
     DynInstPtr head_inst = std::move(*head_it);
+
+    /*GAUTAM - when an entry is popped do*/
+    if (real::isBandwidthPartitioningOn()) {
+        if (curTick() - prev_tick > 500*74 && head_inst->isLoad()) {
+            //it is an LLC access
+            real_numLLC++;
+            real::incrementLLC(head_inst->physEffAddr, name());
+        } else {
+            real_non_LLC++;
+            real::incrementNonLLC(head_inst->physEffAddr, name());
+        }
+        prev_tick=gem5::curTick();
+    }
+
     instList[tid].erase(head_it);
 
     assert(head_inst->readyToCommit());
