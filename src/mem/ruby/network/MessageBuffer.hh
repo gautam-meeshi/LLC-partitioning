@@ -85,7 +85,12 @@ class MessageBuffer : public SimObject
 
     // TRUE if head of queue timestamp <= SystemTime
     bool isReady(Tick current_time) const;
-
+    /*GAUTAM*/
+    void rearrange();
+    void incrementIfetchDRAM();
+    void incrementIfetchLLC();
+    void recordOffChipMsg(int llc);
+    /*GAUTAM*/
     // earliest tick the head of queue will be ready, or MaxTick if empty
     Tick readyTime() const;
 

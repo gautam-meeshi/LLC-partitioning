@@ -41,13 +41,16 @@
 #include "mem/ruby/network/MessageBuffer.hh"
 
 #include <cassert>
-
+#include <string>
 #include "base/cprintf.hh"
 #include "base/logging.hh"
 #include "base/random.hh"
 #include "base/stl_helpers.hh"
 #include "debug/RubyQueue.hh"
 #include "mem/ruby/system/RubySystem.hh"
+#include "sim/real.hh"
+#include "sim/measurements.hh"
+#include "sim/space_partitioning.hh"
 
 namespace gem5
 {
@@ -216,6 +219,9 @@ random_time()
 void
 MessageBuffer::enqueue(MsgPtr message, Tick current_time, Tick delta)
 {
+    /*if(this->name().substr(22,3) == "man"){
+        std::cout<<gem5::curTick()<<this->name()<<" "<<*message<<'\n';
+    }*/
     // record current time incase we have a pop that also adjusts my size
     if (m_time_last_time_enqueue < current_time) {
         m_msgs_this_cycle = 0;  // first msg this cycle
@@ -276,7 +282,35 @@ MessageBuffer::enqueue(MsgPtr message, Tick current_time, Tick delta)
     msg_ptr->updateDelayedTicks(current_time);
     msg_ptr->setLastEnqueueTime(arrival_time);
     msg_ptr->setMsgCounter(m_msg_counter);
-
+    /*GAUTAM*/
+    if(name().substr(12,2) == "l1" ){
+        if(name().substr(22,3) == "req"){
+            int coreid = stoi(this->name().substr(20,1));
+            msg_ptr->setcoreid(coreid);
+        }else if(name().substr(23,3) == "req"){
+            int coreid = stoi(this->name().substr(20,2));
+            msg_ptr->setcoreid(coreid);
+        }
+    }
+    if(name().substr(12,2) == "l2"){
+        int l2idx = stoi(this->name().substr(20,1));
+        if (name().substr(22,2) == "L1"){//LLC
+            int coreid = msg_ptr->getcoreid();
+            measurements::LLCRequestQueueSize(l2idx, m_prio_heap.size());
+            measurements::countLLCRequests(l2idx,coreid);
+        }
+        else if(name().substr(22,2) == "Di"){
+            int coreid = msg_ptr->getcoreid();
+            measurements::countDirRequests(l2idx,coreid);
+        }
+        else if(name().substr(22,17) == "responseToL2Cache"){
+            measurements::countResponsesReceived(l2idx);
+        }
+        else if(name().substr(22, 16) == "unblockToL2Cache"){
+            measurements::countUnblocks(l2idx);
+        }
+    }
+    /*GAUTAM*/
     // Insert the message into the priority heap
     m_prio_heap.push_back(message);
     push_heap(m_prio_heap.begin(), m_prio_heap.end(), std::greater<MsgPtr>());
@@ -303,7 +337,7 @@ MessageBuffer::dequeue(Tick current_time, bool decrement_messages)
 
     // get MsgPtr of the message about to be dequeued
     MsgPtr message = m_prio_heap.front();
-
+    //std::cout<<gem5::curTick()<<" MessageBuffer::dequeue "<<this->name()<<" "<<*message<<" size "<<m_prio_heap.size()-1<<'\n';
     // get the delay cycles
     message->updateDelayedTicks(current_time);
     Tick delay = message->getDelayedTicks();
@@ -334,7 +368,13 @@ MessageBuffer::dequeue(Tick current_time, bool decrement_messages)
     if (m_dequeue_callback) {
         m_dequeue_callback();
     }
-
+    //GAUTAM
+    if(name().substr(12,2) == "l2" && name().substr(22,2) == "L1"){//LLC//WARNING will be a problem when the number of LLCs> 9
+        int l2idx = stoi(this->name().substr(20,1));
+        measurements::LLCRequestQueueSize(l2idx, m_prio_heap.size());
+        measurements::countWaitingTime(l2idx, gem5::curTick() - message->getLastEnqueueTime());
+    }
+    //GAUTAM
     return delay;
 }
 
@@ -523,6 +563,92 @@ MessageBuffer::isReady(Tick current_time) const
     }
     return can_dequeue && is_ready;
 }
+/*GAUTAM created three functions*/
+void
+MessageBuffer::rearrange(){
+    if(!real::isBandwidthPartitioningOn()){
+        /*If bandwidth partitioning is not ON return*/
+        return;
+    }
+    std::string name = this->name();
+    Tick current_time = gem5::curTick();
+    if(name.substr(12,2) == "l2" && name.substr(22,2) == "L1"){//execute the logic only for L1RequestToL2Cache message buffer
+        int l2idx;
+        try{
+    	    l2idx = stoi(name.substr(20,1));
+        }catch(...){
+            throw std::invalid_argument( "Invalid argument to stoi at rearrange " +name );
+        }
+        l2idx = stoi(name.substr(20,1));
+    	std::vector<int> readyCores;
+    	Tick minEnqueueTime = current_time;
+    	std::vector<MsgPtr> temp;
+    	for(int i=0;i<m_prio_heap.size();i++){
+    		if(m_prio_heap[i]->getLastEnqueueTime() <= current_time){//ith message is ready
+    			//get the source core, append in the readyCores
+    			if(m_prio_heap[i]->getLastEnqueueTime() < minEnqueueTime){
+    				minEnqueueTime=m_prio_heap[i]->getLastEnqueueTime();
+    			}
+    			MachineID& mid = m_prio_heap[i]->getRequestor();
+				int core = mid.num;
+    			readyCores.push_back(core);
+    		}
+    	}
+    	int coreToServe = real::getCoreToServe(l2idx, readyCores);
+    	//std::cout<<"PRIORITIZING "<<coreToServe<<" at "<<l2idx<<'\n';
+    	Tick minTime=current_time;//
+    	int minIdx = 0;//
+    	for(int i=0;i<m_prio_heap.size();i++){
+    		if(m_prio_heap[i]->getLastEnqueueTime() <= current_time){//ith message is ready
+    			MachineID& mid = m_prio_heap[i]->getRequestor();
+				int core = mid.num;
+    			if(core == coreToServe && m_prio_heap[i]->getLastEnqueueTime()<=minTime){
+    				minTime = m_prio_heap[i]->getLastEnqueueTime();
+    				minIdx=i;
+    				//m_prio_heap[i]->setLastEnqueueTime(minEnqueueTime-500);
+    				//break;
+    			}
+    		}
+    	}
+    	m_prio_heap[minIdx]->setLastEnqueueTime(minEnqueueTime-500);
+    	std::make_heap(m_prio_heap.begin(), m_prio_heap.end(), std::greater<MsgPtr>());
+    }
+}
+
+void MessageBuffer::incrementIfetchDRAM(){
+    if(!real::isBandwidthPartitioningOn()){
+        return;
+    }
+    int coreid = m_prio_heap.front()->getcoreid();
+    int cpuReqType = m_prio_heap.front()->getcpuReqType();
+    if(cpuReqType==3){//IFETCH
+        MachineID& mid = m_prio_heap.front()->getRequestor();
+	    int l2idx = mid.num;
+        //std::cout<<"IfetchDRAM "<<m_prio_heap.front()<<", LLC ="<<l2idx<<" core = "<<coreid<<'\n';
+        real::incrementIFM(l2idx, coreid);
+    }
+}
+
+void MessageBuffer::incrementIfetchLLC(){
+    if(!real::isBandwidthPartitioningOn()){
+        //if real is off do nothing
+        return;
+    }
+    int& coreid = m_prio_heap.front()->getcoreid();
+    int& cpuReqType = m_prio_heap.front()->getcpuReqType();
+    if(cpuReqType==3){//IFETCH
+        int l2idx = stoi(this->name().substr(20,1));
+        //std::cout<<"IfetchLLC "<<m_prio_heap.front()<<", LLC = "<<l2idx<<" core = "<<coreid<<'\n';
+        real::incrementILLC(l2idx, coreid);
+    }
+}
+
+void MessageBuffer::recordOffChipMsg(int llc){
+    if(SpacePartitioning::getSpacePartitioningAlgo() == 4){
+        SpacePartitioning::recordOffChipMsg(llc);
+    }
+}
+/*GAUTAM*/
 
 Tick
 MessageBuffer::readyTime() const
